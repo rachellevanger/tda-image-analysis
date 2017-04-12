@@ -27,7 +27,7 @@ from scipy import misc
 ##
 ######################################################################
 
-class Image:
+class Image(object):
   """
   The main data container object for a single image. Initialize
   by passing through a bitmap image stored as a numpy array.
@@ -58,8 +58,24 @@ class Image:
   def load_superlevel_pd(self, path):
     self.persistence_diagrams['sup'] = pd.DataFrame(pd.read_csv(path))
 
+  def get_persistent_h1_generators(self, delta=10):
+    # Get H1 generators for spiral/target disambiguation
+    ph_dim1_sub = self.persistence_diagrams['sub'].loc[(self.persistence_diagrams['sub']['dim']==1) & 
+                        ((self.persistence_diagrams['sub']['death'] - self.persistence_diagrams['sub']['birth']) >= delta) & 
+                        (self.persistence_diagrams['sub']['birth']<=127)][['d_x','d_y']]
+    ph_dim1_sup = self.persistence_diagrams['sup'].loc[(self.persistence_diagrams['sup']['dim']==1) & 
+                        ((self.persistence_diagrams['sup']['birth'] - self.persistence_diagrams['sup']['death']) >= delta) & 
+                        (self.persistence_diagrams['sup']['birth']>=127)][['b_x','b_y']]
+    h1gens = np.vstack((ph_dim1_sub, ph_dim1_sup))
+    h1gens = pd.DataFrame(h1gens, columns=['col', 'row'])
+    
+    persistence_h1_gens = np.zeros(self.bmp.shape)
+    persistence_h1_gens[h1gens['row'], h1gens['col']] = 1
+    
+    self.persistence_h1_gens = persistence_h1_gens
 
-class OrientationField:
+
+class OrientationField(object):
   """
   Container object for an orientation field and its defects. Both are stored
   as arrays of floats. The orientation field gives the orientation in

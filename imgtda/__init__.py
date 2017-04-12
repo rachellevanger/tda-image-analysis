@@ -21,6 +21,7 @@ Utility tools
  test              --- Run imgtda unittests
 """
 
+from core import Project
 from core.image import Image
 from core import image
 from core import standard_analysis

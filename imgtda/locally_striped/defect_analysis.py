@@ -20,8 +20,12 @@ import multiprocessing
 from matplotlib import pyplot as plt
 import matplotlib.patheffects as PathEffects
 
+# Constants
+DEFECT_TYPES = {'disclination-concave':'D-', 'disclination-convex':'D+', 'dislocation pair':'DP',
+            'grain boundary':'GB', 'target':'T', 'spiral':'S'}
 
-def classify_all_defects(bmp, td_classify, persistence_h1_gens, radius=10):
+
+def classify_all_defects(bmp, td_classify, persistence_h1_gens, radius=10, mode='parallel'):
   """
   Locates and classifies canonical defects in a locally-striped pattern. 
   Canonical defects are:
@@ -38,6 +42,7 @@ def classify_all_defects(bmp, td_classify, persistence_h1_gens, radius=10):
   td_classify = the topological defect array for classifying
   persistence_h1_gens = persistent homology h1 generator array for differentiating target/spiral
   radius = (10) the radius for clustering the nonzero-charged defects in td_classify
+  mode = {'parallel', 'serial'} to designate parallel or serial processing of defects
 
   Output:
   A list of defect regions, their type, and extra info about them. Types are:
@@ -71,22 +76,26 @@ def classify_all_defects(bmp, td_classify, persistence_h1_gens, radius=10):
 
   ## PROCESS DEFECT CLUSTERS
   
-  # Parallel Processing
-  num_cores = multiprocessing.cpu_count()   
-  results = Parallel(n_jobs=num_cores)(delayed(classify_defect_cluster)(bmp, defect_components == component, 
-    td_classify, persistence_h1_gens, radius) for component in component_list)
-  for process_defects in results:
-      for new_defect in process_defects:
-          all_defects.append(new_defect)
-          
-#     # Sequential Processing
-#     for component in component_list:
-#         result = classify_defect_cluster(bmp, defect_components == component, td_classify, persistence_h1_gens, radius)
-#         for defect in result:
-#             all_defects.append(defect)
+  if mode == 'parallel':
+    # Parallel Processing
+    num_cores = multiprocessing.cpu_count()   
+    results = Parallel(n_jobs=num_cores)(delayed(classify_defect_cluster)(bmp, defect_components == component, 
+      td_classify, persistence_h1_gens, radius) for component in component_list)
+    for process_defects in results:
+        for new_defect in process_defects:
+            all_defects.append(new_defect)
+  else:
+    # Sequential Processing
+    for component in component_list:
+        result = classify_defect_cluster(bmp, defect_components == component, td_classify, persistence_h1_gens, radius)
+        for defect in result:
+            all_defects.append(defect)
   
   return all_defects
 
+def format_defect(defect_region, defect_type, defect_attribute):
+
+  return {'defect_region': defect_region, 'defect_type' : defect_type, 'defect_attribute' : defect_attribute}
 
 def classify_defect_cluster(bmp, defect_region, td_points, persistence_h1_gens, radius):
   """
@@ -116,12 +125,12 @@ def classify_defect_cluster(bmp, defect_region, td_points, persistence_h1_gens, 
       # Monopole (-1) = disclination (branch type)
       # Compute upper or lower disclination
       if defect_list['type'][0]==-1:
-          list_of_classified_defects.append([defect_region, 'disclination-concave', 'center=(%d,%d)' % (defect_list['row'][0],defect_list['col'][0])])
+          list_of_classified_defects.append(format_defect(defect_region, 'disclination-concave', 'center=(%d,%d)' % (defect_list['row'][0],defect_list['col'][0])))
 
       # Monopole (+1) = disclination (lobe type)
       # Compute upper or lower disclination
       if defect_list['type'][0]==1:
-          list_of_classified_defects.append([defect_region, 'disclination-convex', 'center=(%d,%d)' % (defect_list['row'][0],defect_list['col'][0])])
+          list_of_classified_defects.append(format_defect(defect_region, 'disclination-convex', 'center=(%d,%d)' % (defect_list['row'][0],defect_list['col'][0])))
           
   if num_topological_defects == 2:
       # Dipole
@@ -131,7 +140,7 @@ def classify_defect_cluster(bmp, defect_region, td_points, persistence_h1_gens, 
 
       # Pair of (1, -1) = dislocation pair
       if len(defect_list.loc[defect_list['type']==1]) == 1:
-          list_of_classified_defects.append([defect_region, 'dislocation pair', 'center=(%d,%d)' % (avg_row,avg_col)])
+          list_of_classified_defects.append(format_defect(defect_region, 'dislocation pair', 'center=(%d,%d)' % (avg_row,avg_col)))
 
       # Pair of (1, 1) = spiral or possibly a target
       if len(defect_list.loc[defect_list['type']==1]) == 2:
@@ -159,9 +168,9 @@ def classify_defect_cluster(bmp, defect_region, td_points, persistence_h1_gens, 
           inner_spiral_or_target_h1 = np.multiply(inner_spiral_or_target, persistence_h1_gens)
           
           if sum(sum(inner_spiral_or_target_h1)) > 0:
-              list_of_classified_defects.append([spiral_or_target, 'target', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min(neighbors))])
+              list_of_classified_defects.append(format_defect(spiral_or_target, 'target', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min(neighbors))))
           else:
-              list_of_classified_defects.append([spiral_or_target, 'spiral', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min(neighbors))])
+              list_of_classified_defects.append(format_defect(spiral_or_target, 'spiral', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min(neighbors))))
 
   if num_topological_defects >= 3:
       
@@ -184,7 +193,7 @@ def classify_defect_cluster(bmp, defect_region, td_points, persistence_h1_gens, 
       isLinear = (dd[1] < (1./5.)*radius*2)
       isDispersed = (dd[1] > (3./4.)*radius*2)
       if (isAlternating & ~isLinear & ~isDispersed):
-          list_of_classified_defects.append([defect_region, 'grain boundary', 'chain_length=%d' % (num_topological_defects)])
+          list_of_classified_defects.append(format_defect(defect_region, 'grain boundary', 'chain_length=%d' % (num_topological_defects)))
       elif (len(defect_list.loc[defect_list['type']==1]) == 2):
           # Check to see if it is a target or spiral. 
           # Presence of two +1 defects that don't have any -1 in between them
@@ -197,14 +206,14 @@ def classify_defect_cluster(bmp, defect_region, td_points, persistence_h1_gens, 
               outside_points = defect_list.loc[defect_list['type']==-1]
               min_center = min(center_points['distance'])
               min_outside = min(outside_points['distance'])
-              if (min_outside > max(1.25*min_center, radius*2)):
+              if (min_outside > max(1.25*min_center, radius*1.5)):
                   for i in outside_points.index:
                       disclination = np.zeros(bmp.shape)
                       o_row = int(outside_points.ix[i]['row'])
                       o_col = int(outside_points.ix[i]['col'])
                       disclination[o_row,o_col] = 1
                       disclination = morphology.binary_dilation(disclination, morphology.disk(radius))
-                      list_of_classified_defects.append([disclination, 'disclination-concave', 'center=(%d,%d)' % (o_row,o_col)])
+                      list_of_classified_defects.append(format_defect(disclination, 'disclination-concave', 'center=(%d,%d)' % (o_row,o_col)))
 
                   target = np.zeros(bmp.shape)
                   target[avg_row, avg_col] = 1
@@ -213,9 +222,9 @@ def classify_defect_cluster(bmp, defect_region, td_points, persistence_h1_gens, 
                   target_defects = np.multiply(target, persistence_h1_gens)
 
                   if sum(sum(target_defects)) > 0:
-                      list_of_classified_defects.append([target, 'target', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min_outside)])
+                      list_of_classified_defects.append(format_defect(target, 'target', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min_outside)))
                   else:
-                      list_of_classified_defects.append([target, 'spiral', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min_outside)])
+                      list_of_classified_defects.append(format_defect(target, 'spiral', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min_outside)))
 
   return list_of_classified_defects
 
@@ -236,7 +245,7 @@ def combine_classified_defects_into_regions(bmp, defect_list):
   
   # Loop through the defects and accumulate them in the appropriate defect type
   for defect in defect_list:
-      combined_defect_regions[defect[1]] = combined_defect_regions[defect[1]] + defect[0]
+      combined_defect_regions[defect['defect_type']] = combined_defect_regions[defect['defect_type']] + defect['defect_region']
 
   return combined_defect_regions
 
@@ -279,39 +288,33 @@ def centroid(defect_region):
 
 
 def plot_defect_classifications(bmp, list_of_classified_defects, unclassified_defect_region, td_classify, defect_free_region):
-
-  labels = {'disclination-concave':'D-', 'disclination-convex':'D+', 'dislocation pair':'DP',
-            'grain boundary':'GB', 'target':'T', 'spiral':'S'}
   
-
-  plt.rcParams['figure.figsize'] = (10.0, 10.0) 
-  plt.set_cmap('gray')
+  plt.rcParams['figure.figsize'] = (10.0, 10.0);
+  plt.set_cmap('gray');
 
   fig = plt.figure();
   ax = fig.add_subplot(111);
   fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=None, hspace=None);
   
   # Plot the labeled defect regions on top of the temperature field
-  print_bmp = bmp
-  print_bmp[defect_free_region==1.] = 0.5*print_bmp[defect_free_region==1.] # Defect-free region
+  bmp[defect_free_region==1.] = 0.5*bmp[defect_free_region==1.] # Defect-free region
   
   txt_out = []
   for defect in list_of_classified_defects:
-      defect_center = centroid(defect[0])
-      outline = defect[0] ^ morphology.binary_dilation(defect[0],morphology.disk(2))
-      print_bmp[outline==1] = 255
-      txt = ax.annotate(labels[defect[1]],(defect_center[0]-5,defect_center[1]), color='white', fontweight='bold', fontsize=10);
+      defect_center = centroid(defect['defect_region'])
+      outline = defect['defect_region'] ^ morphology.binary_dilation(defect['defect_region'],morphology.disk(2))
+      bmp[outline==1] = 255
+      txt = ax.annotate(DEFECT_TYPES[defect['defect_type']],(defect_center[0]-5,defect_center[1]), color='white', fontweight='bold', fontsize=10);
       txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='k')]);
       txt_out.append(txt)
 
   unknown_td = np.multiply(unclassified_defect_region, (td_classify != 0).astype(np.int))
-  print_bmp[morphology.binary_dilation(unknown_td,morphology.disk(2))==1] = 0
-  print_bmp[morphology.binary_dilation(unknown_td,morphology.disk(1))==1] = 255
+  bmp[morphology.binary_dilation(unknown_td,morphology.disk(2))==1] = 0
+  bmp[morphology.binary_dilation(unknown_td,morphology.disk(1))==1] = 255
 
-  
-  frame = ax.imshow(print_bmp);
+  frame = ax.imshow(bmp);
   
   ax.axis('off');
   
-  return [frame] + txt_out
+  return fig, ax, frame, txt_out
 
