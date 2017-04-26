@@ -61,7 +61,7 @@ def fourier_diff(u, order=1):
     uy = np.real(np.fft.ifft2(uy_fft))
     return [ux, uy]
 
-def emb_wavenumber(u, method="difference"):
+def emb_wavenumber(u, method="difference", smoothing=10):
     u = scipy.ndimage.filters.gaussian_filter(u, sigma=2)
     u = u - np.sum(u)/np.size(u)
     u = u / np.max(np.absolute(u))
@@ -98,5 +98,11 @@ def emb_wavenumber(u, method="difference"):
     Sign = 1.0 - 2.0 * (kx < 0)
     kx = kx * Sign
     ky = ky * Sign
-    return np.sqrt(kx**2.0 + ky**2.0)
+    wn = np.sqrt(kx**2.0 + ky**2.0)
+
+    # Set NaN values to median non-NaN wavenumber value and then smooth
+    wn[np.isnan(wn)] = np.median(wn[np.logical_not(np.isnan(wn))])
+    wn = scipy.ndimage.filters.gaussian_filter(wn, sigma=smoothing)
+
+    return wn
 

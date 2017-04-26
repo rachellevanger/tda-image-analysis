@@ -168,9 +168,9 @@ def classify_defect_cluster(bmp, defect_region, td_points, persistence_h1_gens, 
           inner_spiral_or_target_h1 = np.multiply(inner_spiral_or_target, persistence_h1_gens)
           
           if sum(sum(inner_spiral_or_target_h1)) > 0:
-              list_of_classified_defects.append(format_defect(spiral_or_target, 'target', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min(neighbors))))
+              list_of_classified_defects.append(format_defect(defect_region, 'target', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min(neighbors))))
           else:
-              list_of_classified_defects.append(format_defect(spiral_or_target, 'spiral', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min(neighbors))))
+              list_of_classified_defects.append(format_defect(defect_region, 'spiral', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min(neighbors))))
 
   if num_topological_defects >= 3:
       
@@ -221,10 +221,14 @@ def classify_defect_cluster(bmp, defect_region, td_points, persistence_h1_gens, 
 
                   target_defects = np.multiply(target, persistence_h1_gens)
 
+                  target_defect_region = np.zeros(bmp.shape)
+                  target_defect_region[target_points['row'], target_points['col']] = 1
+                  target_defect_region = morphology.binary_dilation(target_defect_region, morphology.disk(radius))
+
                   if sum(sum(target_defects)) > 0:
-                      list_of_classified_defects.append(format_defect(target, 'target', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min_outside)))
+                      list_of_classified_defects.append(format_defect(target_defect_region, 'target', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min_outside)))
                   else:
-                      list_of_classified_defects.append(format_defect(target, 'spiral', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min_outside)))
+                      list_of_classified_defects.append(format_defect(target_defect_region, 'spiral', 'center=(%d,%d), radius=%0.2f' % (avg_row,avg_col,min_outside)))
 
   return list_of_classified_defects
 
