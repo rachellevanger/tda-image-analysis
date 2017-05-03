@@ -11,9 +11,13 @@ Standard numerical techniques for working with image data.
 import scipy.ndimage
 import numpy as np
 import math
+import pandas as pd
 
 
 def orientation_field(bmp, sigma=3):
+    # Author: Shaun Harker, 2016
+    # Based on algorithm by Bazen and Gerez from "Systematic methods for the 
+    # computation of the directional fields and singular points of fingerprints," 2002.
     """
     Computes orientation field (result everywhere between -pi/2 and pi/2)
     from the given vector field.
@@ -45,6 +49,8 @@ def topological_defect_array_to_dataframe(td_array):
     td = td.astype(np.int)
     td = pd.DataFrame(td, columns=['row', 'col', 'type'])
 
+    return td
+
 def fourier_diff(u, order=1):
     [N, M] = u.shape
     [kx, ky] = np.mgrid[0:N,0:M]
@@ -62,6 +68,10 @@ def fourier_diff(u, order=1):
     return [ux, uy]
 
 def emb_wavenumber(u, method="difference", smoothing=10):
+    # Author: Shaun Harker, 2016
+    # Implementation of the EMB algorithm, from "A new fast method for determining local 
+    # properties of striped patterns.," 1997.
+
     u = scipy.ndimage.filters.gaussian_filter(u, sigma=2)
     u = u - np.sum(u)/np.size(u)
     u = u / np.max(np.absolute(u))
@@ -100,6 +110,7 @@ def emb_wavenumber(u, method="difference", smoothing=10):
     ky = ky * Sign
     wn = np.sqrt(kx**2.0 + ky**2.0)
 
+    # Added by: Rachel Levanger, 2017
     # Set NaN values to median non-NaN wavenumber value and then smooth
     wn[np.isnan(wn)] = np.median(wn[np.logical_not(np.isnan(wn))])
     wn = scipy.ndimage.filters.gaussian_filter(wn, sigma=smoothing)
