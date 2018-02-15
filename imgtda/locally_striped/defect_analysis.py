@@ -24,6 +24,47 @@ import matplotlib.patheffects as PathEffects
 DEFECT_TYPES = {'disclination-concave':'D-', 'disclination-convex':'D+', 'dislocation pair':'DP',
             'grain boundary':'GB', 'target':'T', 'spiral':'S'}
 
+def get_pinch_offs(im, lowercutoff, uppercutoff, delta):
+    """Compute locations of pinch-offs from temperature field persistence data."""
+    
+    # Generate persistent homology defect matrix
+    ph_lower_saddles = im.persistence_diagrams['sub'].loc[(im.persistence_diagrams['sub']['dim']==0) & ((im.persistence_diagrams['sub']['death'] - im.persistence_diagrams['sub']['birth']) >= delta) & (im.persistence_diagrams['sub']['death']>=lowercutoff) & (im.persistence_diagrams['sub']['death']<=127)][['d_x','d_y']]
+    ph_lower_saddles.columns = ['col', 'row']
+    ph_tmp = im.persistence_diagrams['sub'].loc[(im.persistence_diagrams['sub']['dim']==1) & ((im.persistence_diagrams['sub']['death'] - im.persistence_diagrams['sub']['birth']) >= delta) & (im.persistence_diagrams['sub']['birth']>=lowercutoff) & (im.persistence_diagrams['sub']['birth']<=127)][['b_x','b_y']]
+    ph_tmp.columns = ['col', 'row']
+    ph_lower_saddles = pd.concat([ph_lower_saddles, ph_tmp])
+
+    ph_upper_saddles = im.persistence_diagrams['sup'].loc[(im.persistence_diagrams['sup']['dim']==0) & ((im.persistence_diagrams['sup']['birth'] - im.persistence_diagrams['sup']['death']) >= delta) & (im.persistence_diagrams['sup']['death']>=127) & (im.persistence_diagrams['sup']['death']<=uppercutoff)][['d_x','d_y']]
+    ph_upper_saddles.columns = ['col', 'row']
+    ph_tmp = im.persistence_diagrams['sup'].loc[(im.persistence_diagrams['sup']['dim']==1) & ((im.persistence_diagrams['sup']['birth'] - im.persistence_diagrams['sup']['death']) >= delta) & (im.persistence_diagrams['sup']['birth']>=127) & (im.persistence_diagrams['sup']['birth']<=uppercutoff)][['b_x','b_y']]
+    ph_tmp.columns = ['col', 'row']
+    ph_upper_saddles = pd.concat([ph_upper_saddles, ph_tmp])
+    
+    saddle_points = pd.concat([ph_lower_saddles, ph_upper_saddles])
+    
+    saddle_matrix = np.zeros(im.bmp.shape)
+    saddle_matrix[saddle_points['row'], saddle_points['col']] = 1
+
+    return saddle_matrix
+
+
+def get_emerging_targets(im, lowercutoff, uppercutoff, delta):
+    """Compute locations of emerging targets from temperature field persistence data."""
+    
+    # Generate persistent homology defect matrix
+    ph_lower_plumes = im.persistence_diagrams['sub'].loc[(im.persistence_diagrams['sub']['dim']==1) & ((im.persistence_diagrams['sub']['death'] - im.persistence_diagrams['sub']['birth']) >= delta) & (im.persistence_diagrams['sub']['death']<=uppercutoff) & (im.persistence_diagrams['sub']['birth']<=127)][['d_x','d_y']]
+    ph_lower_plumes.columns = ['col', 'row']
+
+    ph_upper_plumes = im.persistence_diagrams['sup'].loc[(im.persistence_diagrams['sup']['dim']==1) & ((im.persistence_diagrams['sup']['birth'] - im.persistence_diagrams['sup']['death']) >= delta) & (im.persistence_diagrams['sup']['birth']>=127) & (im.persistence_diagrams['sup']['death']>=lowercutoff)][['d_x','d_y']]
+    ph_upper_plumes.columns = ['col', 'row']
+    
+    plumes = pd.concat([ph_lower_plumes, ph_upper_plumes])
+    
+    plume_matrix = np.zeros(im.bmp.shape)
+    plume_matrix[plumes['row'], plumes['col']] = 1
+
+    return plume_matrix
+
 
 def classify_all_defects(bmp, td_classify, persistence_h1_gens, radius=10, mode='parallel'):
   """
@@ -93,9 +134,12 @@ def classify_all_defects(bmp, td_classify, persistence_h1_gens, radius=10, mode=
   
   return all_defects
 
+
+
 def format_defect(defect_region, defect_type, defect_attribute):
 
   return {'defect_region': defect_region, 'defect_type' : defect_type, 'defect_attribute' : defect_attribute}
+
 
 def classify_defect_cluster(bmp, defect_region, td_points, persistence_h1_gens, radius):
   """
@@ -321,4 +365,7 @@ def plot_defect_classifications(bmp, list_of_classified_defects, unclassified_de
   ax.axis('off');
   
   return fig, ax, frame, txt_out
+
+
+  
 
